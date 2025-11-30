@@ -1,0 +1,21 @@
+{
+    "name": "ali-eltaweel/neo4j-grm",
+    "version": "0.1.0",
+    "description": "Neo4j Graph Relationship Mapper for PHP",
+    "maintainers": [
+        {
+            "name": "Ali M. Kamel",
+            "email": "ali.kamel.dev@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "ali-eltaweel/neo4j-query-builder": "^1.0",
+        "laudis/neo4j-php-client": "^3.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "Neo4jGRM\\": "src/"
+        }
+    }
+}
