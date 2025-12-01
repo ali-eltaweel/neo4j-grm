@@ -4,19 +4,82 @@ namespace Neo4jGRM;
 
 use Generator;
 use Laudis\Neo4j\Databags\SummarizedResult;
-use Laudis\Neo4j\Types\CypherList;
 use Laudis\Neo4j\Types\CypherMap;
 use Laudis\Neo4j\Types\Node;
 use Neo4jQueryBuilder\Clauses\Create;
 use Neo4jQueryBuilder\QueryBuilder;
+use Neo4jQueryBuilder\RelationshipBuilder;
 
 class Label extends Entity {
 
-    protected static ?string $label = null;
+    public function __get(string $name): mixed {
 
-    public static final function getLabel(): string {
+        if (method_exists($this, $name)) {
 
-        return static::$label ?? class_basename(static::class);
+            if (($relation = $this->$name()) instanceof Relations\Relation) {
+
+                $query = new QueryBuilder();
+
+                $query->match()->relationship(function(RelationshipBuilder $rel) use ($relation) {
+
+                    if ($relation->direction === Relations\Direction::OUTGOING) {
+
+                        $rel->from()->alias('a')->label(static::getLabel());
+                    } else {
+                        $rel->to()->alias('a')->label(static::getLabel());
+                    }
+
+                    $rel->label($relation->name);
+
+                    if ($relation->direction === Relations\Direction::OUTGOING) {
+                        
+                        $rel->to()->alias('b')->label($relation->relatedLabel::getLabel());
+                    } else {
+
+                        $rel->from()->alias('b')->label($relation->relatedLabel::getLabel());
+                    }
+                });
+                
+                $query->where()->condition()->name('id(a)')->operator('=')->value($this->id);
+
+                $query->return()->element('b');
+
+                if (!$relation->multiple) {
+
+                    $query->limit(1);
+                }
+
+                /** @var SummarizedResult $result */
+                $result = static::getClient()->run($query);
+
+                $records = [];
+
+                /** @var CypherMap $record */
+                foreach ($result as $record) {
+
+                    /** @var Node $node */
+                    $node = $record->get('b');
+
+                    $relatedLabel = $relation->relatedLabel;
+
+                    $relatedNode = new $relatedLabel([
+                        'id' => $node->getId(),
+                        ...$node->getProperties()->toArray()
+                    ]);
+
+                    if (!$relation->multiple) {
+
+                        return $relatedNode;
+                    }
+
+                    $records[] = $relatedNode;
+                }
+                
+                return $records;
+            }
+        }
+
+        return parent::__get($name);
     }
 
     public static final function create(array $properties): static {
@@ -44,7 +107,7 @@ class Label extends Entity {
         ]);
     }
 
-    public static final function insert(array $records, bool $return = false): Generator {
+    public static final function insert(array $records): Generator {
 
         $query = new QueryBuilder();
 
@@ -125,7 +188,7 @@ class Label extends Entity {
         /** @var CypherMap $record */
         foreach ($result as $record) {
 
-            // /** @var Node $node */
+            /** @var Node $node */
             $node = $record->get('n');
 
             yield new static([
