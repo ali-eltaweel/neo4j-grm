@@ -90,7 +90,7 @@ class Label extends Entity {
         $query->return()->element('n');
 
         /** @var SummarizedResult $result */
-        $result = static::getClient()->run($query);
+        $result = static::getClient()->run($query, $query->getParameters());
 
         /** @var CypherMap $cypherMap */
         $cypherMap = $result->first();
@@ -124,7 +124,7 @@ class Label extends Entity {
         $query->return()->elements($aliases);
 
         /** @var SummarizedResult $result */
-        $result = static::getClient()->run($query);
+        $result = static::getClient()->run($query, $query->getParameters());
 
         /** @var CypherMap $cypherMap */
         $cypherMap = $result->first();
@@ -148,17 +148,33 @@ class Label extends Entity {
 
         $query = new QueryBuilder();
 
-        $query->match()->node()->alias('n')->label(static::getLabel())->properties($properties);
+        $node = $query->match()->node()->alias('n')->label(static::getLabel());
+
+        foreach ($properties as $key => $value) {
+
+            if (!is_null($value)) {
+
+                $node->property($key, $value);
+            }
+        }
 
         if (!is_null($id)) {
 
             $query->where()->condition()->name('id(n)')->operator('=')->value($id);
         }
 
+        foreach ($properties as $key => $value) {
+
+            if (is_null($value)) {
+
+                $query->where()->condition()->name("n.{$key}")->operator('IS NULL');
+            }
+        }
+
         $query->return()->element('count(n) AS count');
 
         /** @var SummarizedResult $result */
-        $result = static::getClient()->run($query);
+        $result = static::getClient()->run($query, $query->getParameters());
 
         /** @var CypherMap $cypherMap */
         $cypherMap = $result->first();
@@ -170,11 +186,27 @@ class Label extends Entity {
 
         $query = new QueryBuilder();
 
-        $query->match()->node()->alias('n')->label(static::getLabel())->properties($properties);
+        $node = $query->match()->node()->alias('n')->label(static::getLabel());
+
+        foreach ($properties as $key => $value) {
+
+            if (!is_null($value)) {
+
+                $node->property($key, $value);
+            }
+        }
 
         if (!is_null($id)) {
 
             $query->where()->condition()->name('id(n)')->operator('=')->value($id);
+        }
+
+        foreach ($properties as $key => $value) {
+
+            if (is_null($value)) {
+
+                $query->where()->condition()->name("n.{$key}")->operator('IS NULL');
+            }
         }
 
         $query->return()->element('n');
@@ -183,7 +215,7 @@ class Label extends Entity {
         if (!is_null($limit)) $query->limit($limit);
 
         /** @var SummarizedResult $result */
-        $result = static::getClient()->run($query);
+        $result = static::getClient()->run($query, $query->getParameters());
 
         /** @var CypherMap $record */
         foreach ($result as $record) {
@@ -198,20 +230,51 @@ class Label extends Entity {
         }
     }
 
+    public static final function first(int|string|null $id = null, array $properties = []): ?static {
+
+        foreach (static::get($id, $properties, 0, 1) as $record) {
+
+            return $record;
+        }
+
+        return null;
+    }
+
+    public static final function firstOrCreate(array $properties = []): ?static {
+
+        return static::first(null, $properties) ?? static::create($properties);
+    }
+
     public static final function delete(int|string|null $id = null, array $properties = []): void {
 
         $query = new QueryBuilder();
 
-        $query->match()->node()->alias('n')->label(static::getLabel())->properties($properties);
+        $node = $query->match()->node()->alias('n')->label(static::getLabel());
+
+        foreach ($properties as $key => $value) {
+
+            if (!is_null($value)) {
+
+                $node->property($key, $value);
+            }
+        }
 
         if (!is_null($id)) {
 
             $query->where()->condition()->name('id(n)')->operator('=')->value($id);
         }
 
+        foreach ($properties as $key => $value) {
+
+            if (is_null($value)) {
+
+                $query->where()->condition()->name("n.{$key}")->operator('IS NULL');
+            }
+        }
+
         $query->delete()->element('n');
 
         /** @var SummarizedResult $result */
-        $result = static::getClient()->run($query);
+        $result = static::getClient()->run($query, $query->getParameters());
     }
 }
