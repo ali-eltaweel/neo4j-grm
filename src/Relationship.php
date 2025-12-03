@@ -82,8 +82,17 @@ class Relationship extends Entity {
         $query->match()->relationship(function(RelationshipBuilder $relationship) use ($properties) {
 
             $relationship->alias('rel')->label(static::getLabel())->properties($properties);
-            $relationship->from()->alias('start')->label((new static([]))->startingLabel()::getLabel());
-            $relationship->to()->alias('end')->label((new static([]))->endingLabel()::getLabel());
+            $start = $relationship->from()->alias('start');
+            if (!is_null($startingLabelClass = (new static([]))->startingLabel())) {
+
+                $start->label($startingLabelClass::getLabel());
+            }
+
+            $end = $relationship->to()->alias('end');
+            if (!is_null($endingLabelClass = (new static([]))->endingLabel())) {
+
+                $end->label($endingLabelClass::getLabel());
+            }
         });
 
         if (!is_null($id)) {
@@ -172,7 +181,7 @@ class Relationship extends Entity {
         return null;
     }
 
-    public static final function create(Label|Closure $start, Label|Closure $end): static {
+    public static final function create(Label|Closure $start, Label|Closure $end, array $properties = []): static {
 
         $query = new QueryBuilder();
 
@@ -200,12 +209,13 @@ class Relationship extends Entity {
             }
         });
 
-        $query->create()->relationship(function(RelationshipBuilder $rel) {
+        $query->create()->relationship(function(RelationshipBuilder $rel) use ($properties) {
 
             $rel->alias('rel');
             $rel->from()->alias('start');
             $rel->label(static::getLabel());
             $rel->to()->alias('end');
+            $rel->properties($properties);
         });
 
         $query->return()->element('rel');
@@ -228,8 +238,8 @@ class Relationship extends Entity {
         ]);
     }
 
-    public static final function firstOrCreate(Label|Closure $start, Label|Closure $end): ?static {
+    public static final function firstOrCreate(Label|Closure $start, Label|Closure $end, array $properties = []): ?static {
 
-        return static::first(start: $start, end: $end) ?? static::create(start: $start, end: $end);
+        return static::first(start: $start, end: $end, properties: $properties) ?? static::create(start: $start, end: $end, properties: $properties);
     }
 }
