@@ -39,6 +39,11 @@ abstract class Entity {
         );
     }
 
+    public function all() {
+
+        return $this->properties;
+    }
+
     public final function hideProperties(string ...$properties): void {
 
         $this->hidden = array_unique(array_merge($this->hidden, $properties));

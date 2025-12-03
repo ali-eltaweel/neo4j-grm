@@ -12,74 +12,116 @@ use Neo4jQueryBuilder\RelationshipBuilder;
 
 class Label extends Entity {
 
+    private array $relationships = [];
+
     public function __get(string $name): mixed {
 
-        if (method_exists($this, $name)) {
+        if ($this->relationLoaded($name)) {
 
-            if (($relation = $this->$name()) instanceof Relations\Relation) {
+            return $this->relationships[$name];
+        }
 
-                $query = new QueryBuilder();
+        if (method_exists($this, $name) && $this->$name() instanceof Relations\Relation) {
 
-                $query->match()->relationship(function(RelationshipBuilder $rel) use ($relation) {
-
-                    if ($relation->direction === Relations\Direction::OUTGOING) {
-
-                        $rel->from()->alias('a')->label(static::getLabel());
-                    } else {
-                        $rel->to()->alias('a')->label(static::getLabel());
-                    }
-
-                    $rel->label($relation->name);
-
-                    if ($relation->direction === Relations\Direction::OUTGOING) {
-                        
-                        $rel->to()->alias('b')->label($relation->relatedLabel::getLabel());
-                    } else {
-
-                        $rel->from()->alias('b')->label($relation->relatedLabel::getLabel());
-                    }
-                });
-                
-                $query->where()->condition()->name('id(a)')->operator('=')->value($this->id);
-
-                $query->return()->element('b');
-
-                if (!$relation->multiple) {
-
-                    $query->limit(1);
-                }
-
-                /** @var SummarizedResult $result */
-                $result = static::getClient()->run($query);
-
-                $records = [];
-
-                /** @var CypherMap $record */
-                foreach ($result as $record) {
-
-                    /** @var Node $node */
-                    $node = $record->get('b');
-
-                    $relatedLabel = $relation->relatedLabel;
-
-                    $relatedNode = new $relatedLabel([
-                        'id' => $node->getId(),
-                        ...$node->getProperties()->toArray()
-                    ]);
-
-                    if (!$relation->multiple) {
-
-                        return $relatedNode;
-                    }
-
-                    $records[] = $relatedNode;
-                }
-                
-                return $records;
-            }
+            $this->loadRelations([$name]);
+            
+            return $this->relationships[$name] ?? null;
         }
 
         return parent::__get($name);
+    }
+
+    public function toArray() {
+
+        return array_merge(
+            parent::toArray(),
+            array_map(
+                fn (Label|array $relation) => is_array($relation)
+                    ? array_map(fn(Label $label) => $label->toArray(), $relation)
+                    : $relation->toArray(),
+                $this->relationships
+            )
+        );
+    }
+
+    public function all() {
+
+        return array_merge(parent::all(), $this->relationships);
+    }
+
+    public final function relationLoaded(string $relationship): bool {
+
+        return array_key_exists($relationship, $this->relationships);
+    }
+
+    public final function loadRelations(array $relationships, bool $forceReload = false): void {
+
+        $relations = [];
+
+        foreach ($relationships as $relationship) {
+
+            if (array_key_exists($relationship, $this->relationships) && !$forceReload) {
+
+                continue;
+            }
+
+            if (!method_exists($this, $relationship)) {
+
+                throw new \RuntimeException("No relationship method '{$relationship}' defined in label '" . static::getLabel() . "'.");
+            }
+
+            if (!($relation = $this->$relationship()) instanceof Relations\Relation) {
+
+                throw new \RuntimeException("No relationship method '{$relationship}' defined in label '" . static::getLabel() . "'.");
+            }
+
+            $relations[$relationship] = $relation;
+        }
+        
+        $query = new QueryBuilder();
+
+        foreach ($relations as $relationshipName => $relation) {
+
+            $query->match()->relationship(function(RelationshipBuilder $rel) use ($relationshipName, $relation) {
+
+                $rel->label($relation->name);
+                $rel->from()->alias('this')->label(static::getLabel());
+                $rel->to()->alias($relationshipName)->label($relation->relatedLabel::getLabel());
+            });
+        }
+
+        $query->where()->condition()->name('id(this)')->operator('=')->value($this->id);
+
+        $query->return()->elements(array_keys($relations));
+
+        /** @var SummarizedResult $result */
+        $result = static::getClient()->run($query, $query->getParameters());
+
+        /** @var CypherMap $record */
+        $record = $result->first();
+
+        foreach ($relations as $relationshipName => $relation) {
+
+            /** @var Node $node */
+            $node = $record->get($relationshipName);
+
+            $relatedLabelClass = $relation->relatedLabel;
+
+            $instance = new $relatedLabelClass([ 'id' => $node->getId(), ...$node->getProperties()->toArray() ]);
+
+            if ($relation->multiple) {
+            
+                if (!array_key_exists($relationshipName, $this->relationships)) {
+
+                    $this->relationships[$relationshipName] = [];
+                }
+
+                $this->relationships[$relationshipName][] = $instance;
+            } else {
+
+                $this->relationships[$relationshipName] = $instance;
+            }
+        }
     }
 
     public static final function create(array $properties): static {
