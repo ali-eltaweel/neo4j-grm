@@ -1,6 +1,6 @@
 {
     "name": "ali-eltaweel/neo4j-grm",
-    "version": "0.4.0",
+    "version": "0.5.0",
     "description": "Neo4j Graph Relationship Mapper for PHP",
     "maintainers": [
         {

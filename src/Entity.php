@@ -10,6 +10,8 @@ abstract class Entity {
     use Traits\HasClient;
 
     protected static ?string $label = null;
+
+    protected array $hidden = [];
     
     public function __construct(private array $properties) {}
 
@@ -28,9 +30,36 @@ abstract class Entity {
         $this->properties[$property] = $value;
     }
 
+    public function toArray() {
+
+        return array_filter(
+            $this->properties,
+            fn($key) => !in_array($key, $this->hidden),
+            ARRAY_FILTER_USE_KEY
+        );
+    }
+
+    public final function hideProperties(string ...$properties): void {
+
+        $this->hidden = array_unique(array_merge($this->hidden, $properties));
+    }
+
+    public final function showProperties(string ...$properties): void {
+
+        $this->hidden = array_filter(
+            $this->hidden,
+            fn($prop) => !in_array($prop, $properties)
+        );
+    }
+
     public static final function getLabel(): string {
 
-        return static::$label ?? class_basename(static::class);
+        if (!is_null(static::$label)) {
+
+            return static::$label;
+        }
+
+        return array_reverse(explode('\\', static::class))[0];
     }
 
     public static abstract function get(int|string|null $id = null, array $properties = [], ?int $skip = null, ?int $limit = null): Generator;

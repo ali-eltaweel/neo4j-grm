@@ -182,6 +182,11 @@ class Label extends Entity {
         return $cypherMap->get('count');
     }
 
+    public static final function exist(int|string|null $id = null, array $properties = []): bool {
+
+        return static::count($id, $properties) > 0;
+    }
+
     public static final function get(int|string|null $id = null, array $properties = [], ?int $skip = null, ?int $limit = null): Generator {
 
         $query = new QueryBuilder();
