@@ -13,7 +13,7 @@ abstract class Entity {
 
     protected array $hidden = [];
     
-    public function __construct(private array $properties) {}
+    public function __construct(private array $properties, public readonly array $labels = []) {}
 
     public function __get(string $property): mixed {
         

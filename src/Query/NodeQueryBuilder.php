@@ -14,8 +14,8 @@ use Neo4jQueryBuilder\QueryBuilder;
 
 class NodeQueryBuilder {
 
-    private array $labelsMap;
-
+    private string $labelClass;
+    
     private array $labels;
 
     private array $properties;
@@ -31,18 +31,21 @@ class NodeQueryBuilder {
         $this->reset();
     }
 
-    public final function addLabelClass(string $labelClass): self {
+    public final function forLabelClass(string $labelClass): self {
 
         if (!is_subclass_of($labelClass, Label::class)) {
 
-            throw new \InvalidArgumentException("Class {$labelClass} is not a subclass of " . Label::class);
+            throw new \InvalidArgumentException(sprintf(
+                'The class "%s" is not a subclass of "%s".',
+                $labelClass,
+                Label::class
+            ));
         }
-
-        $this->labelsMap[ $labelClass::getLabel() ] = $labelClass;
+        $this->labelClass = $labelClass;
 
         return $this;
     }
-    
+
     public final function labeled(string ...$labels): self {
 
         $this->labels = array_unique(array_merge($this->labels, $labels));
@@ -89,8 +92,9 @@ class NodeQueryBuilder {
                 $return->element('node');
             } else {
 
-                $return->elements(array_map(fn (string $field) => 'node.'.$field, $fields));
+                $return->elements(array_map(fn (string $field) => "node.".$field, $fields));
                 $return->element('id(node) AS id');
+                $return->element('labels(node) AS labels');
             }
         });
 
@@ -103,15 +107,13 @@ class NodeQueryBuilder {
 
             $this->query->limit($limit);
         }
-dd(
-    $this->query.'',
-    $this->query->getParameters()
-);
+
         $result = $this->execute();
 
         /** @var CypherMap $record */
         foreach ($result as $record) {
 
+            $nodeLabels = [];
             $nodeProperties = [];
 
             if (is_null($fields)) {
@@ -119,8 +121,12 @@ dd(
                 /** @var Node $node */
                 $node = $record->get('node');
 
+                $nodeLabels     = $node->getLabels()->toArray();
                 $nodeProperties = [ 'id' => $node->getId(), ...$node->getProperties()->toArray() ];
+
             } else {
+
+                $nodeLabels = $record->get('labels')->toArray();
 
                 foreach ($fields as $field) {
 
@@ -130,10 +136,40 @@ dd(
                 $nodeProperties['id'] = $record->get('id');
             }
 
-            $labelClass = $this->labelsMap[$this->labels[0] ?? null] ?? Label::class;
+            $labelClass = $this->labelClass;
 
-            yield new $labelClass($nodeProperties);
+            $instance = new $labelClass($nodeProperties, $nodeLabels);
+
+            yield $instance;
         }
+    }
+
+    public final function count(): int {
+
+        $this->query->match()->node($this->setupNodeBuilder(...));
+
+        if (!is_null($this->id)) {
+
+            $this->query->where()->condition()->name('id(node)')->operator('=')->value($this->id);
+        }
+
+        $this->query->return()->element('count(node) AS count');
+
+        return $this->execute()->first()->get('count');
+    }
+
+    public final function exist(): bool {
+
+        $this->query->match()->node($this->setupNodeBuilder(...));
+
+        if (!is_null($this->id)) {
+
+            $this->query->where()->condition()->name('id(node)')->operator('=')->value($this->id);
+        }
+
+        $this->query->return()->element('count(node) AS count');
+
+        return 0 < $this->execute()->first()->get('count');
     }
 
     public final function first(?array $fields = null): ?Label {
@@ -148,9 +184,8 @@ dd(
 
     public function reset(): self {
 
-        $this->labelsMap = [];
-
         $this->labels     = [];
+        $this->labelClass = Label::class;
         $this->properties = [];
         $this->id         = null;
 
@@ -168,11 +203,23 @@ dd(
 
         $node->alias('node');
 
-        foreach ($this->labels as $label) {
+        foreach ($this->getLabels() as $label) {
 
             $node->label($label);
         }
 
         $node->properties($this->properties);
+    }
+
+    private function getLabels(): array {
+
+        $labels = $this->labels;
+
+        if ($this->labelClass !== Label::class) {
+
+            array_unshift($labels, $this->labelClass::getLabel());
+        }
+
+        return $labels;
     }
 }
