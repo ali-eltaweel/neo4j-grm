@@ -204,6 +204,18 @@ class NodeQueryBuilder {
         return new $labelClass($nodeProperties, $nodeLabels);
     }
 
+    public final function delete(): int {
+
+        $this->query->match()->node($this->setupNodeBuilder(...));
+        $this->query->with()->element('node');
+        $this->query->delete()->element('node');
+        $this->query->return()->element('COUNT(node) as count');
+
+        $result = $this->execute();
+        
+        return $result->first()->get('count');
+    }
+
     public function reset(): self {
 
         $this->labels     = [];
