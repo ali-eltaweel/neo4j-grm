@@ -216,6 +216,20 @@ class NodeQueryBuilder {
         return $result->first()->get('count');
     }
 
+    public final function update(array $properties): int {
+
+        $this->query->match()->node($this->setupNodeBuilder(...));
+
+        foreach ($properties as $key => $value) {
+
+            $this->query->set()->property()->name("node.{$key}")->value($value);
+        }
+
+        $this->query->return()->element('COUNT(node) as count');
+
+        return $this->execute()->first()->get('count');
+    }
+
     public function reset(): self {
 
         $this->labels     = [];
