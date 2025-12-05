@@ -182,6 +182,28 @@ class NodeQueryBuilder {
         return null;
     }
 
+    public final function create(): Label {
+
+        if (!is_null($this->id)) {
+
+            throw new \LogicException('Cannot create a node with a predefined ID.');
+        }
+
+        $this->query->create()->node($this->setupNodeBuilder(...));
+
+        $this->query->return()->element('node');
+
+        /** @var Node $node */
+        $node = $this->execute()->first()->get('node');
+
+        $nodeLabels     = $node->getLabels()->toArray();
+        $nodeProperties = [ 'id' => $node->getId(), ...$node->getProperties()->toArray() ];
+
+        $labelClass = $this->labelClass;
+
+        return new $labelClass($nodeProperties, $nodeLabels);
+    }
+
     public function reset(): self {
 
         $this->labels     = [];
