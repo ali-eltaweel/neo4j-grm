@@ -4,6 +4,7 @@ namespace Neo4jGRM\Builder;
 
 use Generator;
 use InvalidArgumentException;
+use Laudis\Neo4j\Contracts\CypherSequence;
 use Laudis\Neo4j\Databags\SummarizedResult;
 use Neo4jGRM\Models\GraphEntity;
 use Neo4jQueryBuilder\Cypher\CypherQuery;
@@ -110,6 +111,14 @@ abstract class QueryBuilder {
         return GraphEntity::getClient()->run(
             $query->getQueryString(),
             $query->getParameters()
+        );
+    }
+
+    protected static final function mapToArray(array|CypherSequence $seq): array {
+
+        return array_map(
+            fn (mixed $value) => $value instanceof CypherSequence ? self::mapToArray($value) :$value,
+            is_array($seq) ? $seq : $seq->toArray()
         );
     }
 }
