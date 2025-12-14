@@ -5,6 +5,7 @@ namespace Neo4jGRM\Models;
 use Laudis\Neo4j\Client;
 
 use Closure, RuntimeException;
+use Neo4jGRM\Builder\QueryBuilder;
 
 abstract class GraphEntity {
 
@@ -89,4 +90,6 @@ abstract class GraphEntity {
 
         return array_reverse(explode('\\', static::class))[0];
     }
+
+    public static abstract function query(): QueryBuilder;
 }

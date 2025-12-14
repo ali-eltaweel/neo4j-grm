@@ -27,13 +27,16 @@ class RelationshipQueryBuilder extends QueryBuilder {
 
     private NodeQueryBuilder $leftNode, $rightNode;
 
+    private bool $leftToRight;
+
     public function reset(): void {
 
         parent::reset();
 
-        $this->alias      = 'rel';
-        $this->leftNode   = (new NodeQueryBuilder())->alias('left');
-        $this->rightNode  = (new NodeQueryBuilder())->alias('right');
+        $this->alias       = 'rel';
+        $this->leftNode    = (new NodeQueryBuilder())->alias('left');
+        $this->rightNode   = (new NodeQueryBuilder())->alias('right');
+        $this->leftToRight = true;
     }
 
     public final function leftNode(): NodeQueryBuilder {
@@ -46,6 +49,13 @@ class RelationshipQueryBuilder extends QueryBuilder {
         return $this->rightNode;
     }
 
+    public final function leftToRight(bool $value = true): self {
+
+        $this->leftToRight = $value;
+
+        return $this;
+    }
+
     public final function get(?array $fields = null, ?int $skip = null, ?int $limit = null): Generator {
 
         $query = new CypherQuery();
@@ -54,6 +64,7 @@ class RelationshipQueryBuilder extends QueryBuilder {
         $match->addItem($relationship = $this->createRelationshipCypher());
         $this->leftNode->createNodeCypher($relationship->left);
         $this->rightNode->createNodeCypher($relationship->right);
+        $relationship->leftToRight($this->leftToRight);
 
         $predicates = [];
 
@@ -140,7 +151,10 @@ class RelationshipQueryBuilder extends QueryBuilder {
         $query = new CypherQuery();
 
         $query->addClause($match = new Match_());
-        $match->addItem($this->createRelationshipCypher());
+        $match->addItem($relationship = $this->createRelationshipCypher());
+        $this->leftNode->createNodeCypher($relationship->left);
+        $this->rightNode->createNodeCypher($relationship->right);
+        $relationship->leftToRight($this->leftToRight);
 
         if (!is_null($this->wherePredicate)) {
 
@@ -194,6 +208,7 @@ class RelationshipQueryBuilder extends QueryBuilder {
         $create->addItem($relationship = $this->createRelationshipCypher());
         $relationship->left->alias($this->leftNode->alias);
         $relationship->right->alias($this->rightNode->alias);
+        $relationship->leftToRight($this->leftToRight);
 
         $query->addClause(new Return_($this->alias));
 
@@ -219,6 +234,7 @@ class RelationshipQueryBuilder extends QueryBuilder {
         $match->addItem($relationship = $this->createRelationshipCypher());
         $this->leftNode->createNodeCypher($relationship->left);
         $this->rightNode->createNodeCypher($relationship->right);
+        $relationship->leftToRight($this->leftToRight);
 
         $predicates = [];
 
@@ -265,6 +281,7 @@ class RelationshipQueryBuilder extends QueryBuilder {
         $match->addItem($relationship = $this->createRelationshipCypher());
         $this->leftNode->createNodeCypher($relationship->left);
         $this->rightNode->createNodeCypher($relationship->right);
+        $relationship->leftToRight($this->leftToRight);
 
         $predicates = [];
 
