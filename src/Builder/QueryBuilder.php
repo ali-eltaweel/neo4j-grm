@@ -286,6 +286,8 @@ abstract class QueryBuilder {
 
     public abstract function delete(): int;
 
+    public abstract function update(array $properties): int;
+
     protected final function execute(CypherQuery $query): SummarizedResult {
 
         return GraphEntity::getClient()->run(

@@ -11,6 +11,7 @@ use Neo4jQueryBuilder\Cypher\Clauses\Delete;
 use Neo4jQueryBuilder\Cypher\Clauses\Limit;
 use Neo4jQueryBuilder\Cypher\Clauses\Match_;
 use Neo4jQueryBuilder\Cypher\Clauses\Return_;
+use Neo4jQueryBuilder\Cypher\Clauses\Set;
 use Neo4jQueryBuilder\Cypher\Clauses\Skip;
 use Neo4jQueryBuilder\Cypher\Clauses\Where;
 use Neo4jQueryBuilder\Cypher\CypherQuery;
@@ -248,6 +249,57 @@ class RelationshipQueryBuilder extends QueryBuilder {
         }
 
         $query->addClause(new Delete($this->alias));
+        
+        $query->addClause(new Return_(
+            sprintf('count(%s) as count', $this->alias)
+        ));
+
+        return $this->execute($query)->first()->get('count');
+    }
+
+    public final function update(array $properties): int {
+
+        $query = new CypherQuery();
+
+        $query->addClause($match = new Match_());
+        $match->addItem($relationship = $this->createRelationshipCypher());
+        $this->leftNode->createNodeCypher($relationship->left);
+        $this->rightNode->createNodeCypher($relationship->right);
+
+        $predicates = [];
+
+        if (!is_null($this->wherePredicate)) {
+
+            $predicates[] = $this->createPredicate($this->wherePredicate);
+        }
+
+        if (!is_null($this->leftNode->wherePredicate)) {
+
+            $predicates[] = $this->leftNode->createPredicate($this->leftNode->wherePredicate);
+        }
+
+        if (!is_null($this->rightNode->wherePredicate)) {
+
+            $predicates[] = $this->rightNode->createPredicate($this->rightNode->wherePredicate);
+        }
+        
+        if (!empty($predicates)) {
+
+            if (count($predicates) === 1) {
+
+                $query->addClause(new Where($predicates[0]));
+            } else {
+                
+                $query->addClause(new Where(new AndPredicate(...$predicates)));
+            }
+        }
+
+        $query->addClause($set = new Set());
+        
+        foreach ($properties as $field => $value) {
+
+            $set->property($this->alias, $field, $value);
+        }
         
         $query->addClause(new Return_(
             sprintf('count(%s) as count', $this->alias)
