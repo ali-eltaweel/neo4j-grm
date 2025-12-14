@@ -6,11 +6,14 @@ use Generator;
 use Laudis\Neo4j\Types\CypherMap;
 use Laudis\Neo4j\Types\Relationship as TypesRelationship;
 use Neo4jGRM\Models\Relationship as RelationshipModel;
+use Neo4jQueryBuilder\Cypher\Clauses\Create;
 use Neo4jQueryBuilder\Cypher\Clauses\Limit;
 use Neo4jQueryBuilder\Cypher\Clauses\Match_;
 use Neo4jQueryBuilder\Cypher\Clauses\Return_;
 use Neo4jQueryBuilder\Cypher\Clauses\Skip;
+use Neo4jQueryBuilder\Cypher\Clauses\Where;
 use Neo4jQueryBuilder\Cypher\CypherQuery;
+use Neo4jQueryBuilder\Cypher\Predicates\Boolean\AndPredicate;
 use Neo4jQueryBuilder\Cypher\Relationship;
 
 /**
@@ -20,11 +23,25 @@ use Neo4jQueryBuilder\Cypher\Relationship;
  */
 class RelationshipQueryBuilder extends QueryBuilder {
 
+    private NodeQueryBuilder $leftNode, $rightNode;
+
     public function reset(): void {
 
         parent::reset();
 
-        $this->alias = 'rel';
+        $this->alias      = 'rel';
+        $this->leftNode   = (new NodeQueryBuilder())->alias('left');
+        $this->rightNode  = (new NodeQueryBuilder())->alias('right');
+    }
+
+    public final function leftNode(): NodeQueryBuilder {
+
+        return $this->leftNode;
+    }
+
+    public final function rightNode(): NodeQueryBuilder {
+
+        return $this->rightNode;
     }
 
     public final function get(?array $fields = null, ?int $skip = null, ?int $limit = null): Generator {
@@ -32,7 +49,37 @@ class RelationshipQueryBuilder extends QueryBuilder {
         $query = new CypherQuery();
 
         $query->addClause($match = new Match_());
-        $match->addItem($this->createRelationshipCypher());
+        $match->addItem($relationship = $this->createRelationshipCypher());
+        $this->leftNode->createNodeCypher($relationship->left);
+        $this->rightNode->createNodeCypher($relationship->right);
+
+        $predicates = [];
+
+        if (!is_null($this->wherePredicate)) {
+
+            $predicates[] = $this->createPredicate($this->wherePredicate);
+        }
+
+        if (!is_null($this->leftNode->wherePredicate)) {
+
+            $predicates[] = $this->leftNode->createPredicate($this->leftNode->wherePredicate);
+        }
+
+        if (!is_null($this->rightNode->wherePredicate)) {
+
+            $predicates[] = $this->rightNode->createPredicate($this->rightNode->wherePredicate);
+        }
+        
+        if (!empty($predicates)) {
+
+            if (count($predicates) === 1) {
+
+                $query->addClause(new Where($predicates[0]));
+            } else {
+                
+                $query->addClause(new Where(new AndPredicate(...$predicates)));
+            }
+        }
 
         $query->addClause($return = new Return_());
         if (is_null($fields)) {
@@ -49,7 +96,7 @@ class RelationshipQueryBuilder extends QueryBuilder {
 
         if (!is_null($skip))  $query->addClause(new Skip($skip));
         if (!is_null($limit)) $query->addClause(new Limit($limit));
-        
+
         $result = $this->execute($query);
 
         /** @var CypherMap $record */
@@ -92,12 +139,74 @@ class RelationshipQueryBuilder extends QueryBuilder {
 
         $query->addClause($match = new Match_());
         $match->addItem($this->createRelationshipCypher());
+
+        if (!is_null($this->wherePredicate)) {
+
+            $query->addClause(new Where($this->createPredicate($this->wherePredicate)));
+        }
     
         $query->addClause(new Return_(
             sprintf('count(%s) as count', $this->alias)
         ));
 
         return $this->execute($query)->first()->get('count');
+    }
+
+    public final function create(): RelationshipModel {
+
+        $query = new CypherQuery();
+
+        $query->addClause($match = new Match_());
+        $match->addItem($this->leftNode->createNodeCypher());
+        $match->addItem($this->rightNode->createNodeCypher());
+
+        $predicates = [];
+
+        if (!is_null($this->wherePredicate)) {
+
+            $predicates[] = $this->createPredicate($this->wherePredicate);
+        }
+
+        if (!is_null($this->leftNode->wherePredicate)) {
+
+            $predicates[] = $this->leftNode->createPredicate($this->leftNode->wherePredicate);
+        }
+
+        if (!is_null($this->rightNode->wherePredicate)) {
+
+            $predicates[] = $this->rightNode->createPredicate($this->rightNode->wherePredicate);
+        }
+        
+        if (!empty($predicates)) {
+
+            if (count($predicates) === 1) {
+
+                $query->addClause(new Where($predicates[0]));
+            } else {
+                
+                $query->addClause(new Where(new AndPredicate(...$predicates)));
+            }
+        }
+
+        $query->addClause($create = new Create());
+        $create->addItem($relationship = $this->createRelationshipCypher());
+        $relationship->left->alias($this->leftNode->alias);
+        $relationship->right->alias($this->rightNode->alias);
+
+        $query->addClause(new Return_($this->alias));
+
+        $result = $this->execute($query);
+
+        /** @var TypesRelationship $relationship */
+        $relationship = $result->first()->get($this->alias);
+
+        $relationshipId         = $relationship->getId();
+        $relationshipLabels     = [ $relationship->getType() ];
+        $relationshipProperties = static::mapToArray($relationship->getProperties());
+
+        $relationshipClass = $this->entityClass ?? RelationshipModel::class;
+
+        return new $relationshipClass($relationshipId, static::mapToArray($relationshipProperties), $relationshipLabels);
     }
 
     private function createRelationshipCypher(): Relationship {

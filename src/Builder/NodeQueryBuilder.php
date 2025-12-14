@@ -6,6 +6,7 @@ use Generator;
 use Laudis\Neo4j\Types\CypherMap;
 use Laudis\Neo4j\Types\Node as TypesNode;
 use Neo4jGRM\Models\Node as NodeModel;
+use Neo4jQueryBuilder\Cypher\Clauses\Create;
 use Neo4jQueryBuilder\Cypher\Clauses\Limit;
 use Neo4jQueryBuilder\Cypher\Clauses\Match_;
 use Neo4jQueryBuilder\Cypher\Clauses\Return_;
@@ -112,9 +113,34 @@ class NodeQueryBuilder extends QueryBuilder {
         return $this->execute($query)->first()->get('count');
     }
 
-    private function createNodeCypher(): Node {
+    public final function create(): NodeModel {
 
-        $node = new Node($this->alias);
+        $query = new CypherQuery();
+
+        $query->addClause($create = new Create());
+        $create->addItem($this->createNodeCypher());
+
+        $query->addClause(new Return_($this->alias));
+        
+        $result = $this->execute($query);
+
+        /** @var TypesNode $node */
+        $node = $result->first()->get($this->alias);
+
+        $nodeId         = $node->getId();
+        $nodeLabels     = $node->getLabels()->toArray();
+        $nodeProperties = static::mapToArray($node->getProperties());
+        
+        $nodeClass = $this->entityClass ?? NodeModel::class;
+
+        return new $nodeClass($nodeId, static::mapToArray($nodeProperties), $nodeLabels);
+    }
+
+    public final function createNodeCypher(?Node $node = null): Node {
+
+        $node ??= new Node();
+
+        $node->alias($this->alias);
 
         $labels = $this->labels;
 

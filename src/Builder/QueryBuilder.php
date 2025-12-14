@@ -281,6 +281,9 @@ abstract class QueryBuilder {
     /** @return Generator<T> */
     public abstract function get(?array $fields = null, ?int $skip = null, ?int $limit = null): Generator;
 
+    /** @return T */
+    public abstract function create(): GraphEntity;
+
     protected final function execute(CypherQuery $query): SummarizedResult {
 
         return GraphEntity::getClient()->run(
