@@ -7,6 +7,7 @@ use Laudis\Neo4j\Types\CypherMap;
 use Laudis\Neo4j\Types\Relationship as TypesRelationship;
 use Neo4jGRM\Models\Relationship as RelationshipModel;
 use Neo4jQueryBuilder\Cypher\Clauses\Create;
+use Neo4jQueryBuilder\Cypher\Clauses\Delete;
 use Neo4jQueryBuilder\Cypher\Clauses\Limit;
 use Neo4jQueryBuilder\Cypher\Clauses\Match_;
 use Neo4jQueryBuilder\Cypher\Clauses\Return_;
@@ -207,6 +208,52 @@ class RelationshipQueryBuilder extends QueryBuilder {
         $relationshipClass = $this->entityClass ?? RelationshipModel::class;
 
         return new $relationshipClass($relationshipId, static::mapToArray($relationshipProperties), $relationshipLabels);
+    }
+
+    public final function delete(): int {
+
+        $query = new CypherQuery();
+
+        $query->addClause($match = new Match_());
+        $match->addItem($relationship = $this->createRelationshipCypher());
+        $this->leftNode->createNodeCypher($relationship->left);
+        $this->rightNode->createNodeCypher($relationship->right);
+
+        $predicates = [];
+
+        if (!is_null($this->wherePredicate)) {
+
+            $predicates[] = $this->createPredicate($this->wherePredicate);
+        }
+
+        if (!is_null($this->leftNode->wherePredicate)) {
+
+            $predicates[] = $this->leftNode->createPredicate($this->leftNode->wherePredicate);
+        }
+
+        if (!is_null($this->rightNode->wherePredicate)) {
+
+            $predicates[] = $this->rightNode->createPredicate($this->rightNode->wherePredicate);
+        }
+        
+        if (!empty($predicates)) {
+
+            if (count($predicates) === 1) {
+
+                $query->addClause(new Where($predicates[0]));
+            } else {
+                
+                $query->addClause(new Where(new AndPredicate(...$predicates)));
+            }
+        }
+
+        $query->addClause(new Delete($this->alias));
+        
+        $query->addClause(new Return_(
+            sprintf('count(%s) as count', $this->alias)
+        ));
+
+        return $this->execute($query)->first()->get('count');
     }
 
     private function createRelationshipCypher(): Relationship {

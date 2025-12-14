@@ -7,6 +7,7 @@ use Laudis\Neo4j\Types\CypherMap;
 use Laudis\Neo4j\Types\Node as TypesNode;
 use Neo4jGRM\Models\Node as NodeModel;
 use Neo4jQueryBuilder\Cypher\Clauses\Create;
+use Neo4jQueryBuilder\Cypher\Clauses\Delete;
 use Neo4jQueryBuilder\Cypher\Clauses\Limit;
 use Neo4jQueryBuilder\Cypher\Clauses\Match_;
 use Neo4jQueryBuilder\Cypher\Clauses\Return_;
@@ -134,6 +135,27 @@ class NodeQueryBuilder extends QueryBuilder {
         $nodeClass = $this->entityClass ?? NodeModel::class;
 
         return new $nodeClass($nodeId, static::mapToArray($nodeProperties), $nodeLabels);
+    }
+
+    public final function delete(bool $detach = true): int {
+
+        $query = new CypherQuery();
+
+        $query->addClause($match = new Match_());
+        $match->addItem($this->createNodeCypher());
+
+        if (!is_null($this->wherePredicate)) {
+
+            $query->addClause(new Where($this->createPredicate($this->wherePredicate)));
+        }
+    
+        $query->addClause((new Delete($this->alias))->detach($detach));
+        
+        $query->addClause(new Return_(
+            sprintf('count(%s) as count', $this->alias)
+        ));
+
+        return $this->execute($query)->first()->get('count');
     }
 
     public final function createNodeCypher(?Node $node = null): Node {
