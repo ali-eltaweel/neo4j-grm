@@ -10,6 +10,7 @@ use Neo4jQueryBuilder\Cypher\Clauses\Limit;
 use Neo4jQueryBuilder\Cypher\Clauses\Match_;
 use Neo4jQueryBuilder\Cypher\Clauses\Return_;
 use Neo4jQueryBuilder\Cypher\Clauses\Skip;
+use Neo4jQueryBuilder\Cypher\Clauses\Where;
 use Neo4jQueryBuilder\Cypher\CypherQuery;
 use Neo4jQueryBuilder\Cypher\Node;
 
@@ -33,6 +34,11 @@ class NodeQueryBuilder extends QueryBuilder {
 
         $query->addClause($match = new Match_());
         $match->addItem($this->createNodeCypher());
+
+        if (!is_null($this->wherePredicate)) {
+
+            $query->addClause(new Where($this->createPredicate($this->wherePredicate)));
+        }
     
         $query->addClause($return = new Return_());
         if (is_null($fields)) {
@@ -93,7 +99,12 @@ class NodeQueryBuilder extends QueryBuilder {
 
         $query->addClause($match = new Match_());
         $match->addItem($this->createNodeCypher());
-    
+
+        if (!is_null($this->wherePredicate)) {
+
+            $query->addClause(new Where($this->createPredicate($this->wherePredicate)));
+        }
+
         $query->addClause(new Return_(
             sprintf('count(%s) as count', $this->alias)
         ));
